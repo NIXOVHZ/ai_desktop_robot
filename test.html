@@ -1,0 +1,43 @@
+<!-- webpage chat interface -->
+<!-- test.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>AI机器人测试</title>
+<style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:20px;} .msg{ margin:10px 0; padding:12px; border-radius:8px;} .user{background:#e3f2fd;text-align:right;} .ai{background:#f5f5f5;} input, button{padding:10px;margin-top:10px;width:100%;box-sizing:border-box;}</style>
+</head>
+<body>
+    <h2>🤖 与你的AI机器人对话</h2>
+    <div id="chatBox"></div>
+    <input type="text" id="input" placeholder="输入消息..." autocomplete="off">
+    <button onclick="sendMessage()">发送</button>
+    <script>
+        async function sendMessage() {
+            const input = document.getElementById('input');
+            const msg = input.value.trim();
+            if(!msg) return;
+
+            // 显示用户消息
+            document.getElementById('chatBox').innerHTML += `<div class="msg user"><strong>你：</strong>${msg}</div>`;
+            input.value = '';
+
+            // 显示“思考中”
+            document.getElementById('chatBox').innerHTML += `<div class="msg ai" id="thinking"><em>思考中...</em></div>`;
+            document.getElementById('chatBox').scrollTop = 1e9;
+
+            // 发送请求到服务器
+            const resp = await fetch('http://localhost:8000/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: msg, user_id: 'test'})
+            });
+            const data = await resp.json();
+
+            // 移除“思考中”，显示AI回复
+            document.getElementById('thinking').remove();
+            document.getElementById('chatBox').innerHTML += `<div class="msg ai"><strong>AI：</strong>${data.reply}</div>`;
+            input.focus();
+        }
+        document.getElementById('input').onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
+    </script>
+</body>
+</html>
