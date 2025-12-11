@@ -5,11 +5,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from llm_client import get_llm_client
 import uvicorn
-import os
 from dotenv import load_dotenv
+
+from database import get_db
+from models import ChatMessage
+from sqlalchemy.orm import Session
+from fastapi import Depends  # 用于依赖注入
 
 # 加载 .env 文件中的配置
 load_dotenv()
+
+# server.py 顶部附近，在 load_dotenv() 之后添加
+import os
+load_dotenv()
+print("=== 环境变量检查 ===") # 添加这行
+print(f"LLM_PROVIDER 的值是：{os.getenv('LLM_PROVIDER')}") # 添加这行
+print(f"DEEPSEEK_API_KEY 的前几位是：{os.getenv('DEEPSEEK_API_KEY', '未找到')[:10]}...") # 添加这行，只显示前10位以防泄露
+print("==================") # 添加这行
+
+
 
 app = FastAPI(title="AI桌面机器人服务器")
 
@@ -30,27 +44,49 @@ class ChatRequest(BaseModel):
     user_id: str = "default_user"
 
 @app.post("/chat")
-async def chat_api(request: ChatRequest):
-    """核心聊天接口"""
-    user_id = request.user_id
-    if user_id not in conversation_history:
-        conversation_history[user_id] = []
+async def chat_api(
+    request: ChatRequest,
+    db: Session = Depends(get_db)  # 依赖注入，自动提供会话，请求结束后自动关闭
+):
+    # 1. 保存用户消息到数据库
+    user_msg = ChatMessage(
+        session_id=request.user_id,
+        role="user",
+        content=request.message
+    )
+    db.add(user_msg)
+    db.commit()
+    db.refresh(user_msg)
 
-    # 1. 将用户消息加入历史
-    conversation_history[user_id].append({"role": "user", "content": request.message})
+    # 2. 构建对话历史（从数据库查询最近的N条）
+    history_messages = db.query(ChatMessage) \
+        .filter(ChatMessage.session_id == request.user_id) \
+        .order_by(ChatMessage.created_at.desc()) \
+        .limit(10) \
+        .all()
+    # 注意：查询结果是时间倒序，可能需要反转来构建正确的messages列表
+    history_messages.reverse()
 
-    # 2. 调用AI获取回复
+    # 3. 将数据库记录格式化为llm_client所需的messages格式
+    messages_for_ai = [
+        {"role": msg.role, "content": msg.content}
+        for msg in history_messages
+    ]
+
+    # 4. 调用AI获取回复
     client = get_llm_client()
-    ai_reply = await client.chat(conversation_history[user_id])
+    ai_reply = await client.chat(messages_for_ai)
 
-    # 3. 将AI回复加入历史
-    conversation_history[user_id].append({"role": "assistant", "content": ai_reply})
+    # 5. 保存AI回复到数据库
+    ai_msg = ChatMessage(
+        session_id=request.user_id,
+        role="assistant",
+        content=ai_reply
+    )
+    db.add(ai_msg)
+    db.commit()
 
-    # 4. 保持历史长度，避免过长
-    if len(conversation_history[user_id]) > 20:
-        conversation_history[user_id] = conversation_history[user_id][-20:]
-
-    return {"reply": ai_reply, "history_length": len(conversation_history[user_id])}
+    return {"reply": ai_reply, "history_length": len(history_messages) + 1}
 
 @app.get("/")
 def root():

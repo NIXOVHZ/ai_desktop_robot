@@ -3,23 +3,28 @@ import os
 import httpx
 from typing import List,Dict
 
+from pyexpat.errors import messages
+
+
 class DeepSeekClient:
     """DeepSeek API 客户端"""
     def __init__(self):
         self.api_key = os.getenv("DEEPSEEK_API_KEY")
-        self.base_url = "https://aip.deepseek.com/chat/completions"
+        self.base_url = "https://api.deepseek.com/chat/completions"
         self.headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
     async def chat(self, message:list[Dict]) -> str:
         """发送消息给Deepseek并获取回复"""
-        data = {"model": "deepseek-chat", "message": message, "stream": False}
+        data = {"model": "deepseek-chat", "messages": messages, "stream": False,"max_tokens":50}
+        import json  # 如果文件顶部还没导入的话，请添加
+        print(f"[DEBUG] 请求体内容: {json.dumps(data, ensure_ascii=False)}")
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(self.base_url, json=data, headers=self.headers)
                 if response.status_code == 200:
                     return response.json()["choices"][0]["messages"]["content"]
                 else:
-                    return f"抱歉，AI服务器暂时出了点问题（错误吗：{response.status_code})。"
+                    return f"抱歉，AI服务器暂时出了点问题（错误码：{response.status_code})。"
         except Exception:
             return "抱歉，网络连接出现问题，请检查你的网络或API密钥配置。"
 
@@ -37,7 +42,10 @@ class MockAIClient:
 def get_llm_client():
     """根据配置返回对应的AI客户端"""
     provider = os.getenv("LLM_PROVIDER","mock").lower()
+    print(f"[LLM Client] 请求的提供者是：'{provider}'")  # 添加这行
     if provider == "deepseek":
+        print("[LLM Client] 正在使用 DeepSeek 客户端。")  # 添加这行
         return DeepSeekClient()
     else:
+        print("[LLM Client] 正在使用模拟客户端。")  # 添加这行
         return MockAIClient()
