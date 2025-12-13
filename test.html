@@ -1,43 +1,188 @@
-<!-- webpage chat interface -->
-<!-- test.html -->
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><title>AI机器人测试</title>
-<style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:20px;} .msg{ margin:10px 0; padding:12px; border-radius:8px;} .user{background:#e3f2fd;text-align:right;} .ai{background:#f5f5f5;} input, button{padding:10px;margin-top:10px;width:100%;box-sizing:border-box;}</style>
+<head>
+    <meta charset="UTF-8">
+    <title>AI机器人测试</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+        .msg { margin: 10px 0; padding: 12px; border-radius: 8px; }
+        .user { background: #e3f2fd; text-align: right; }
+        .ai { background: #f5f5f5; }
+        input, button { padding: 10px; margin-top: 10px; width: 100%; box-sizing: border-box; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+        .controls button { width: auto; flex-grow: 1; }
+        .session-info {
+            background: #f0f0f0;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
 </head>
 <body>
     <h2>🤖 与你的AI机器人对话</h2>
+
+    <!-- 控制按钮 -->
+    <div class="controls">
+        <button onclick="startNewSession()">🔄 新对话</button>
+        <button onclick="clearChat()">🗑️ 清空聊天</button>
+    </div>
+
+    <!-- 会话信息 -->
+    <div class="session-info" id="sessionInfo">
+        会话ID: <span id="sessionIdDisplay">加载中...</span>
+        <button onclick="copySessionId()" style="margin-left: 10px; font-size: 10px;">📋 复制</button>
+    </div>
+
+    <!-- 聊天区域 -->
     <div id="chatBox"></div>
+
+    <!-- 输入区域 -->
     <input type="text" id="input" placeholder="输入消息..." autocomplete="off">
     <button onclick="sendMessage()">发送</button>
+
     <script>
+        // 会话管理
+        let currentSessionId = null;
+
+        // 初始化：从本地存储获取或创建新的会话ID
+        function initSession() {
+            // 尝试从URL参数获取session_id
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlSessionId = urlParams.get('session_id');
+
+            if (urlSessionId) {
+                currentSessionId = urlSessionId;
+                localStorage.setItem('ai_chat_session_id', urlSessionId);
+            } else {
+                // 从本地存储获取
+                currentSessionId = localStorage.getItem('ai_chat_session_id');
+
+                // 如果没有，创建一个新的
+                if (!currentSessionId) {
+                    currentSessionId = generateSessionId();
+                    localStorage.setItem('ai_chat_session_id', currentSessionId);
+                }
+            }
+
+            // 更新显示
+            document.getElementById('sessionIdDisplay').textContent = currentSessionId;
+            console.log('当前会话ID:', currentSessionId);
+        }
+
+        // 生成新的会话ID
+        function generateSessionId() {
+            return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // 开始新对话
+        function startNewSession() {
+            if (confirm('开始新对话将清空当前聊天记录，是否继续？')) {
+                // 生成新的会话ID
+                currentSessionId = generateSessionId();
+                localStorage.setItem('ai_chat_session_id', currentSessionId);
+
+                // 更新显示
+                document.getElementById('sessionIdDisplay').textContent = currentSessionId;
+
+                // 清空聊天界面
+                document.getElementById('chatBox').innerHTML = '';
+
+                // 提示用户
+                addMessage('系统', '已开始新对话。', 'system');
+                console.log('新会话ID:', currentSessionId);
+            }
+        }
+
+        // 清空聊天记录（仅前端）
+        function clearChat() {
+            document.getElementById('chatBox').innerHTML = '';
+            addMessage('系统', '已清空聊天记录。', 'system');
+        }
+
+        // 复制会话ID
+        function copySessionId() {
+            navigator.clipboard.writeText(currentSessionId).then(() => {
+                alert('会话ID已复制到剪贴板！');
+            });
+        }
+
+        // 添加消息到聊天框
+        function addMessage(sender, content, type = 'normal') {
+            const chatBox = document.getElementById('chatBox');
+            let cssClass = '';
+
+            if (type === 'user') cssClass = 'user';
+            else if (type === 'ai') cssClass = 'ai';
+            else cssClass = 'system';
+
+            chatBox.innerHTML += `<div class="msg ${cssClass}"><strong>${sender}：</strong>${content}</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // 发送消息
         async function sendMessage() {
             const input = document.getElementById('input');
             const msg = input.value.trim();
-            if(!msg) return;
+            if (!msg) return;
 
             // 显示用户消息
-            document.getElementById('chatBox').innerHTML += `<div class="msg user"><strong>你：</strong>${msg}</div>`;
+            addMessage('你', msg, 'user');
             input.value = '';
 
-            // 显示“思考中”
-            document.getElementById('chatBox').innerHTML += `<div class="msg ai" id="thinking"><em>思考中...</em></div>`;
-            document.getElementById('chatBox').scrollTop = 1e9;
+            // 显示"思考中"
+            const thinkingId = 'thinking_' + Date.now();
+            document.getElementById('chatBox').innerHTML += `<div class="msg ai" id="${thinkingId}"><em>思考中...</em></div>`;
+            document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
 
-            // 发送请求到服务器
-            const resp = await fetch('http://localhost:8000/chat', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({message: msg, user_id: 'test'})
-            });
-            const data = await resp.json();
+            try {
+                // 发送请求到服务器
+                const resp = await fetch('http://localhost:8000/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: msg,
+                        session_id: currentSessionId  // 使用动态生成的session_id
+                    })
+                });
 
-            // 移除“思考中”，显示AI回复
-            document.getElementById('thinking').remove();
-            document.getElementById('chatBox').innerHTML += `<div class="msg ai"><strong>AI：</strong>${data.reply}</div>`;
+                if (!resp.ok) {
+                    throw new Error(`HTTP错误: ${resp.status}`);
+                }
+
+                const data = await resp.json();
+
+                // 移除"思考中"
+                document.getElementById(thinkingId).remove();
+
+                // 显示AI回复
+                addMessage('AI', data.reply, 'ai');
+
+            } catch (error) {
+                // 移除"思考中"
+                document.getElementById(thinkingId).remove();
+
+                // 显示错误
+                addMessage('系统', `发送失败: ${error.message}`, 'system');
+                console.error('发送消息失败:', error);
+            }
+
             input.focus();
         }
-        document.getElementById('input').onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
+
+        // 回车发送
+        document.getElementById('input').onkeypress = (e) => {
+            if (e.key === 'Enter') sendMessage();
+        };
+
+        // 页面加载时初始化
+        window.onload = function() {
+            initSession();
+            // 添加欢迎消息
+            addMessage('系统', '请输入你的消息开始对话。你可以使用"新对话"按钮开始全新的对话。', 'system');
+        };
     </script>
 </body>
 </html>
