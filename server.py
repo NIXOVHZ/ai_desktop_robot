@@ -67,14 +67,27 @@ async def chat_api(
     # 注意：查询结果是时间倒序，可能需要反转来构建正确的messages列表
     history_messages.reverse()
 
-    # 3. 将数据库记录格式化为llm_client所需的messages格式
+   # 3. 将数据库记录格式化为llm_client所需的messages格式
     messages_for_ai = [
-        {"role": msg.role, "content": msg.content}
-        for msg in history_messages
-    ]
+       {"role": msg.role, "content": msg.content}
+       for msg in history_messages
+   ]
+
+    # =========== 临时替换开始 ===========
+    # # 直接使用当前用户消息，跳过数据库历史，用于验证API
+    # messages_for_ai = [
+    #     {"role": "user", "content": request.message}
+    # ]
+    # # =========== 临时替换结束 ===========
 
     # 4. 调用AI获取回复
     client = get_llm_client()
+    # print(" === 调试：发送给AI的消息列表 ===")  # 正确：所有的 " "
+    # print(f"变量 `messages_for_ai` 的类型是：{type(messages_for_ai)}")  # 正确：所有的 " "
+    # print(f"变量 `messages_for_ai` 的完整内容是：")
+    # import json
+    # print(json.dumps(messages_for_ai, indent=2, ensure_ascii=False))
+    # print(" === 调试结束 ===")
     ai_reply = await client.chat(messages_for_ai)
 
     # 5. 保存AI回复到数据库

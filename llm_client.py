@@ -13,20 +13,36 @@ class DeepSeekClient:
         self.base_url = "https://api.deepseek.com/chat/completions"
         self.headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
-    async def chat(self, message:list[Dict]) -> str:
+    async def chat(self, messages: List[Dict]) -> str:  # 【修正1】参数名改为复数 `messages`
         """发送消息给Deepseek并获取回复"""
-        data = {"model": "deepseek-chat", "messages": messages, "stream": False,"max_tokens":50}
-        import json  # 如果文件顶部还没导入的话，请添加
-        print(f"[DEBUG] 请求体内容: {json.dumps(data, ensure_ascii=False)}")
+        # 【修正1】此处直接使用参数 `messages`，它是从 server.py 传来的正确列表
+        data = {
+            "model": "deepseek-chat",
+            "messages": messages,  # 现在是正确的变量
+            "stream": False,
+            "max_tokens": 50
+        }
+        # （可选）可以保留调试打印，但要修正变量名
+        # print(f"[LLM Client] 收到 {len(messages)} 条历史消息")
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(self.base_url, json=data, headers=self.headers)
+
                 if response.status_code == 200:
-                    return response.json()["choices"][0]["messages"]["content"]
+                    # 【修正2】关键：这里是 'message' 不是 'messages'
+                    return response.json()["choices"][0]["message"]["content"]
                 else:
-                    return f"抱歉，AI服务器暂时出了点问题（错误码：{response.status_code})。"
-        except Exception:
-            return "抱歉，网络连接出现问题，请检查你的网络或API密钥配置。"
+                    # 可以保留详细的错误信息，便于调试
+                    error_detail = response.text[:200] if response.text else "无详细信息"
+                    return f"[DeepSeek API错误] 状态码 {response.status_code}，详情: {error_detail}"
+
+        except httpx.TimeoutException:
+            return "请求DeepSeek API超时，请检查网络连接或稍后重试。"
+        except Exception as e:
+            # 打印异常有助于调试
+            print(f"[LLM Client] 未预期错误: {e}")
+            return "处理AI回复时发生未知错误。"
 
 class MockAIClient:
     """模拟AI客户端，用于无API密钥时测试"""
