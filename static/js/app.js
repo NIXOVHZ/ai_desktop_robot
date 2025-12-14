@@ -228,70 +228,93 @@ class AIChatApp {
 
     // 添加消息到UI（支持时间戳）
     addMessageToUI(role, content, showTimestamp = true, timestamp = null) {
-        const messageId = 'msg_' + Date.now();
+    const messageId = 'msg_' + Date.now();
 
-        // 使用传入的时间戳，如果没有则使用当前时间
-        const msgTime = timestamp ? new Date(timestamp) : new Date();
-        const timeStr = showTimestamp ? msgTime.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        }) : '';
+    // 使用传入的时间戳，如果没有则使用当前时间
+    const msgTime = timestamp ? new Date(timestamp) : new Date();
+    const timeStr = showTimestamp ? msgTime.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }) : '';
 
-        // 如果消息是今天的，只显示时间，否则显示日期和时间
-        let displayTime = timeStr;
-        if (timestamp) {
-            const now = new Date();
-            const msgDate = new Date(timestamp);
+    let messageClass, avatarHtml, name;
 
-            if (msgDate.toDateString() !== now.toDateString()) {
-                // 不是今天，显示日期
-                displayTime = msgDate.toLocaleDateString() + ' ' + timeStr;
-            }
-        }
-
-        let messageClass, avatar, name;
-
-        switch(role) {
-            case 'user':
-                messageClass = 'message-user';
-                avatar = '<div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">你</div>';
-                name = '你';
-                break;
-            case 'assistant':
-                messageClass = 'message-ai';
-                avatar = '<div class="w-8 h-8 gradient-bg rounded-full flex items-center justify-center text-white"><i class="fas fa-robot"></i></div>';
-                name = 'AI助手';
-                break;
-            default:
-                messageClass = 'message-system';
-                avatar = '<div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-gray-600"><i class="fas fa-info-circle"></i></div>';
-                name = '系统';
-        }
-
-        const messageHTML = `
-            <div id="${messageId}" class="message ${messageClass} flex space-x-3 fade-in">
-                <div class="flex-shrink-0">${avatar}</div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center space-x-2 mb-1">
-                        <span class="font-semibold text-sm">${name}</span>
-                        ${showTimestamp && displayTime ? `<span class="text-xs text-gray-500">${displayTime}</span>` : ''}
-                    </div>
-                    <div class="text-gray-800 whitespace-pre-wrap">${this.escapeHtml(content)}</div>
-                </div>
-            </div>
-        `;
-
-        // 添加到聊天容器
-        this.elements.chatContainer.insertAdjacentHTML('beforeend', messageHTML);
-
-        // 滚动到底部（如果是新消息，没有timestamp）
-        if (!timestamp) {
-            this.scrollToBottom();
-        }
-
-        return messageId;
+    switch(role) {
+        case 'user':
+            messageClass = 'message-user';
+            avatarHtml = '<div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">你</div>';
+            name = '你';
+            break;
+        case 'assistant':
+            messageClass = 'message-ai';
+            avatarHtml = '<div class="w-8 h-8 gradient-bg rounded-full flex items-center justify-center text-white"><i class="fas fa-robot"></i></div>';
+            name = 'AI助手';
+            break;
+        default:
+            messageClass = 'message-system';
+            avatarHtml = '<div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-gray-600"><i class="fas fa-info-circle"></i></div>';
+            name = '系统';
     }
+
+    // 简单的截断逻辑
+    const MAX_PREVIEW_LENGTH = 500;
+    const needsExpand = content.length > MAX_PREVIEW_LENGTH;
+    const displayContent = needsExpand ?
+        content.substring(0, MAX_PREVIEW_LENGTH) + '...' :
+        content;
+
+    const messageHTML = `
+        <div id="${messageId}" class="message ${messageClass} flex space-x-3 fade-in" 
+             data-full-content="${this.escapeHtml(content).replace(/"/g, '&quot;')}">
+            <div class="flex-shrink-0">${avatarHtml}</div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center space-x-2 mb-1">
+                    <span class="font-semibold text-sm">${name}</span>
+                    ${showTimestamp && timeStr ? `<span class="text-xs text-gray-500">${timeStr}</span>` : ''}
+                </div>
+                <div class="message-content text-gray-800 whitespace-pre-wrap">
+                    ${this.escapeHtml(displayContent)}
+                </div>
+                ${needsExpand ? `
+                    <div class="mt-2">
+                        <button onclick="window.chatApp.expandMessage('${messageId}')" 
+                                class="text-xs text-blue-600 hover:text-blue-800 flex items-center">
+                            <i class="fas fa-chevron-down mr-1"></i> 展开完整回复
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    // 添加到聊天容器
+    this.elements.chatContainer.insertAdjacentHTML('beforeend', messageHTML);
+
+    // 滚动到底部（如果是新消息）
+    if (!timestamp) {
+        this.scrollToBottom();
+    }
+
+    return messageId;
+}
+
+    // 添加展开消息的方法
+    expandMessage(messageId) {
+    const messageElement = document.getElementById(messageId);
+    if (!messageElement) return;
+
+    const fullContent = messageElement.getAttribute('data-full-content');
+    const contentDiv = messageElement.querySelector('.message-content');
+    const expandButton = messageElement.querySelector('button');
+
+    if (fullContent && contentDiv && expandButton) {
+        // 显示完整内容
+        contentDiv.innerHTML = this.escapeHtml(fullContent);
+        // 移除展开按钮
+        expandButton.remove();
+    }
+}
 
     // 显示思考中指示器
     showThinkingIndicator() {

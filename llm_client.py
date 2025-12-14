@@ -8,6 +8,27 @@ from pyexpat.errors import messages
 
 class DeepSeekClient:
     """DeepSeek API 客户端"""
+
+    async def _call_deepseek_api(self, messages: List[Dict], max_tokens: int = 2000) -> str:
+        """调用DeepSeek API - 确保足够的回复长度"""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                json={
+                    "model": "deepseek-chat",
+                    "messages": messages,
+                    "max_tokens": max_tokens,  # 2000通常是足够的
+                    "temperature": 0.7,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            # 添加日志查看返回的完整内容
+            print(f"[LLM] 收到响应，长度: {len(data['choices'][0]['message']['content'])} 字符")
+            print(f"[LLM] 回复内容: {data['choices'][0]['message']['content'][:100]}...")
+
+        return data["choices"][0]["message"]["content"]
     def __init__(self):
         self.api_key = os.getenv("DEEPSEEK_API_KEY")
         self.base_url = "https://api.deepseek.com/chat/completions"

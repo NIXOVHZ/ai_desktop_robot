@@ -139,9 +139,15 @@ async def chat_api(
     db.add(user_msg)
     db.commit()
 
-    # 调用AI获取回复
+    # 4. 调用AI获取回复
+    print(f"[LLM] 调用AI，消息数量: {len(messages_for_ai)}")
+    print(f"[LLM] 最后一条用户消息: {request.message}")
+
     client = get_llm_client()
     ai_reply = await client.chat(messages_for_ai)
+
+    print(f"[LLM] AI回复长度: {len(ai_reply)} 字符")
+    print(f"[LLM] AI回复前200字符: {ai_reply[:200]}")
 
     # 保存AI回复
     ai_msg = ChatMessage(
@@ -156,7 +162,8 @@ async def chat_api(
         "reply": ai_reply,
         "session_id": session_id,
         "history_length": len(history_messages) + 2,
-        "status": "success"
+        "status": "success",
+        "reply_length": len(ai_reply)  # 添加回复长度便于调试
     }
 
 
