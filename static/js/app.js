@@ -257,12 +257,17 @@ class AIChatApp {
             name = '系统';
     }
 
-    // 简单的截断逻辑
-    const MAX_PREVIEW_LENGTH = 500;
-    const needsExpand = content.length > MAX_PREVIEW_LENGTH;
-    const displayContent = needsExpand ?
-        content.substring(0, MAX_PREVIEW_LENGTH) + '...' :
-        content;
+//    // 简单的截断逻辑
+//    const MAX_PREVIEW_LENGTH = 500;
+//    const needsExpand = content.length > MAX_PREVIEW_LENGTH;
+//    const displayContent = needsExpand ?
+//        content.substring(0, MAX_PREVIEW_LENGTH) + '...' :
+//        content;
+    // ============【修复核心】============
+    // 直接使用完整内容，不做任何截断
+    const displayContent = content; // 关键：让显示内容等于原始内容
+    const needsExpand = false;      // 不再需要展开
+    // ===================================
 
     const messageHTML = `
         <div id="${messageId}" class="message ${messageClass} flex space-x-3 fade-in" 

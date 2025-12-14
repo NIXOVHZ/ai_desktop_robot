@@ -6,63 +6,120 @@ from typing import List,Dict
 from pyexpat.errors import messages
 
 
+# class DeepSeekClient:
+#     """DeepSeek API 客户端"""
+#
+#     async def _call_deepseek_api(self, messages: List[Dict], max_tokens: int = 2000) -> str:
+#         """调用DeepSeek API - 确保足够的回复长度"""
+#         async with httpx.AsyncClient(timeout=30.0) as client:
+#             response = await client.post(
+#                 "https://api.deepseek.com/v1/chat/completions",
+#                 json={
+#                     "model": "deepseek-chat",
+#                     "messages": messages,
+#                     "max_tokens": max_tokens,  # 2000通常是足够的
+#                     "temperature": 0.7,
+#                 },
+#             )
+#             response.raise_for_status()
+#             data = response.json()
+#
+#             # 添加日志查看返回的完整内容
+#             print(f"[LLM] 收到响应，长度: {len(data['choices'][0]['message']['content'])} 字符")
+#             print(f"[LLM] 回复内容: {data['choices'][0]['message']['content'][:100]}...")
+#
+#         return data["choices"][0]["message"]["content"]
+#     def __init__(self):
+#         self.api_key = os.getenv("DEEPSEEK_API_KEY")
+#         self.base_url = "https://api.deepseek.com/chat/completions"
+#         self.headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+#
+#     async def chat(self, messages: List[Dict]) -> str:  # 【修正1】参数名改为复数 `messages`
+#         """发送消息给Deepseek并获取回复"""
+#         # 【修正1】此处直接使用参数 `messages`，它是从 server.py 传来的正确列表
+#         data = {
+#             "model": "deepseek-chat",
+#             "messages": messages,  # 现在是正确的变量
+#             "stream": False,
+#             "max_tokens": 50
+#         }
+#         # （可选）可以保留调试打印，但要修正变量名
+#         # print(f"[LLM Client] 收到 {len(messages)} 条历史消息")
+#
+#         try:
+#             async with httpx.AsyncClient(timeout=30.0) as client:
+#                 response = await client.post(self.base_url, json=data, headers=self.headers)
+#
+#                 if response.status_code == 200:
+#                     # 【修正2】关键：这里是 'message' 不是 'messages'
+#                     return response.json()["choices"][0]["message"]["content"]
+#                 else:
+#                     # 可以保留详细的错误信息，便于调试
+#                     error_detail = response.text[:200] if response.text else "无详细信息"
+#                     return f"[DeepSeek API错误] 状态码 {response.status_code}，详情: {error_detail}"
+#
+#         except httpx.TimeoutException:
+#             return "请求DeepSeek API超时，请检查网络连接或稍后重试。"
+#         except Exception as e:
+#             # 打印异常有助于调试
+#             print(f"[LLM Client] 未预期错误: {e}")
+#             return "处理AI回复时发生未知错误。"
+
 class DeepSeekClient:
     """DeepSeek API 客户端"""
 
-    async def _call_deepseek_api(self, messages: List[Dict], max_tokens: int = 2000) -> str:
-        """调用DeepSeek API - 确保足够的回复长度"""
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                json={
-                    "model": "deepseek-chat",
-                    "messages": messages,
-                    "max_tokens": max_tokens,  # 2000通常是足够的
-                    "temperature": 0.7,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            # 添加日志查看返回的完整内容
-            print(f"[LLM] 收到响应，长度: {len(data['choices'][0]['message']['content'])} 字符")
-            print(f"[LLM] 回复内容: {data['choices'][0]['message']['content'][:100]}...")
-
-        return data["choices"][0]["message"]["content"]
     def __init__(self):
         self.api_key = os.getenv("DEEPSEEK_API_KEY")
-        self.base_url = "https://api.deepseek.com/chat/completions"
-        self.headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        if not self.api_key:
+            raise ValueError("未找到 DEEPSEEK_API_KEY 环境变量")
+        self.base_url = "https://api.deepseek.com/v1/chat/completions"  # 注意：包含 /v1
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
 
-    async def chat(self, messages: List[Dict]) -> str:  # 【修正1】参数名改为复数 `messages`
+    async def chat(self, messages: List[Dict], max_tokens: int = 2000) -> str:
         """发送消息给Deepseek并获取回复"""
-        # 【修正1】此处直接使用参数 `messages`，它是从 server.py 传来的正确列表
+
+        # 准备请求数据
         data = {
             "model": "deepseek-chat",
-            "messages": messages,  # 现在是正确的变量
-            "stream": False,
-            "max_tokens": 50
+            "messages": messages,
+            "max_tokens": max_tokens,  # 关键：不再是硬编码的50
+            "temperature": 0.7,
+            "stream": False
         }
-        # （可选）可以保留调试打印，但要修正变量名
-        # print(f"[LLM Client] 收到 {len(messages)} 条历史消息")
+
+        # 调试日志：查看发送的数据大小
+        total_chars = sum(len(msg.get("content", "")) for msg in messages)
+        print(f"[LLM Client] 发送 {len(messages)} 条上下文消息，共约 {total_chars} 字符，请求 {max_tokens} tokens")
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(self.base_url, json=data, headers=self.headers)
+                response.raise_for_status()
+                result = response.json()
 
-                if response.status_code == 200:
-                    # 【修正2】关键：这里是 'message' 不是 'messages'
-                    return response.json()["choices"][0]["message"]["content"]
-                else:
-                    # 可以保留详细的错误信息，便于调试
-                    error_detail = response.text[:200] if response.text else "无详细信息"
-                    return f"[DeepSeek API错误] 状态码 {response.status_code}，详情: {error_detail}"
+                # 提取回复
+                ai_reply = result["choices"][0]["message"]["content"]
+                usage = result.get("usage", {})
+
+                # 调试日志：查看返回的完整信息
+                print(f"[LLM Client] 收到回复，长度: {len(ai_reply)} 字符")
+                print(f"[LLM Client] API消耗: {usage.get('total_tokens', 'N/A')} tokens")
+                # 可选：打印前200字符以验证完整性
+                # print(f"[LLM Client] 回复预览: {ai_reply[:200]}")
+
+                return ai_reply
 
         except httpx.TimeoutException:
-            return "请求DeepSeek API超时，请检查网络连接或稍后重试。"
+            print("[LLM Client] 错误: 请求DeepSeek API超时")
+            return "请求超时，请稍后重试。"
+        except httpx.HTTPStatusError as e:
+            print(f"[LLM Client] 错误: API返回 HTTP {e.response.status_code}: {e.response.text[:200]}")
+            return f"[API错误] 状态码 {e.response.status_code}"
         except Exception as e:
-            # 打印异常有助于调试
-            print(f"[LLM Client] 未预期错误: {e}")
+            print(f"[LLM Client] 未预期错误: {type(e).__name__}: {e}")
             return "处理AI回复时发生未知错误。"
 
 class MockAIClient:
@@ -78,9 +135,9 @@ class MockAIClient:
 
 def get_llm_client():
     """根据配置返回对应的AI客户端"""
-    provider = os.getenv("LLM_PROVIDER","mock").lower()
-    print(f"[LLM Client] 请求的提供者是：'{provider}'")  # 添加这行
+    provider = os.getenv("LLM_PROVIDER","deepseek").lower()
     if provider == "deepseek":
+        print(f"[LLM Client] 请求的提供者是：'{provider}'")  # 添加这行
         print("[LLM Client] 正在使用 DeepSeek 客户端。")  # 添加这行
         return DeepSeekClient()
     else:
