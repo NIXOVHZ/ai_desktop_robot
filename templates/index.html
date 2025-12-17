@@ -234,5 +234,53 @@
             }
         }
     </script>
+<!-- 添加到现有HTML中 -->
+<div id="sessionManager" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="background: white; width: 500px; margin: 50px auto; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);">
+        <h3>🗑️ 会话管理</h3>
+
+        <div class="session-action">
+            <h4>删除全部会话</h4>
+            <button onclick="deleteAllSessions()" class="danger-btn">⚠️ 删除所有会话</button>
+            <p class="help-text">这将删除所有聊天记录，不可恢复。</p>
+        </div>
+
+        <div class="session-action">
+            <h4>智能清理</h4>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span>保留最近</span>
+                <input type="number" id="keepLatest" value="5" min="1" max="50" style="width: 60px;">
+                <span>个会话，删除其他</span>
+                <button onclick="keepLatestSessions()" class="warning-btn">清理旧会话</button>
+            </div>
+            <p class="help-text">自动保留最近的会话，清理旧的会话记录。</p>
+        </div>
+
+        <div class="session-action">
+            <h4>批量删除</h4>
+            <div id="sessionList" style="max-height: 200px; overflow-y: auto; margin: 10px 0; border: 1px solid #ddd; padding: 10px;">
+                <!-- 会话列表会动态加载到这里 -->
+                <p>正在加载会话列表...</p>
+            </div>
+            <button onclick="loadSessionsForDeletion()" class="secondary-btn">🔄 刷新列表</button>
+            <button onclick="deleteSelectedSessions()" class="danger-btn">删除选中的会话</button>
+        </div>
+
+        <div style="margin-top: 20px; text-align: center;">
+            <button onclick="closeSessionManager()" class="primary-btn">关闭</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.danger-btn { background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.danger-btn:hover { background: #c82333; }
+.warning-btn { background: #ffc107; color: black; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.warning-btn:hover { background: #e0a800; }
+.primary-btn { background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.secondary-btn { background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.help-text { color: #6c757d; font-size: 12px; margin-top: 5px; }
+.session-action { margin: 20px 0; padding: 15px; border: 1px solid #e9ecef; border-radius: 5px; }
+</style>
 </body>
 </html>

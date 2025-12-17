@@ -1,8 +1,8 @@
 # models.py
-from sqlalchemy import Column, Integer, String, Text, DateTime, create_engine
+from sqlalchemy import Column, Integer, String, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
-import os
+from datetime import datetime
 
 # 创建基类
 Base = declarative_base()
@@ -16,9 +16,12 @@ class ChatMessage(Base):
     session_id = Column(String(255), nullable=False, index=True)  # 对话会话ID，方便区分不同对话
     role = Column(String(50), nullable=False)  # 'user' 或 'assistant'
     content = Column(Text, nullable=False)  # 消息内容
-    created_at = Column(DateTime(timezone=True), server_default=func.now())  # 创建时间
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,  # 确保不为空
+        default=datetime.utcnow  # Python端的默认值
+    )
 
     def __repr__(self):
         return f"<ChatMessage(session_id='{self.session_id}', role='{self.role}')>"
-
-# 注意：我们稍后会在 database.py 中创建引擎和初始化表

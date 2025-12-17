@@ -1,69 +1,9 @@
-# communication module
 import os
+from typing import List, Dict
 import httpx
-from typing import List,Dict
+import json
+from openai import AsyncOpenAI  # 新增：用于小米MiMo
 
-from pyexpat.errors import messages
-
-
-# class DeepSeekClient:
-#     """DeepSeek API 客户端"""
-#
-#     async def _call_deepseek_api(self, messages: List[Dict], max_tokens: int = 2000) -> str:
-#         """调用DeepSeek API - 确保足够的回复长度"""
-#         async with httpx.AsyncClient(timeout=30.0) as client:
-#             response = await client.post(
-#                 "https://api.deepseek.com/v1/chat/completions",
-#                 json={
-#                     "model": "deepseek-chat",
-#                     "messages": messages,
-#                     "max_tokens": max_tokens,  # 2000通常是足够的
-#                     "temperature": 0.7,
-#                 },
-#             )
-#             response.raise_for_status()
-#             data = response.json()
-#
-#             # 添加日志查看返回的完整内容
-#             print(f"[LLM] 收到响应，长度: {len(data['choices'][0]['message']['content'])} 字符")
-#             print(f"[LLM] 回复内容: {data['choices'][0]['message']['content'][:100]}...")
-#
-#         return data["choices"][0]["message"]["content"]
-#     def __init__(self):
-#         self.api_key = os.getenv("DEEPSEEK_API_KEY")
-#         self.base_url = "https://api.deepseek.com/chat/completions"
-#         self.headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-#
-#     async def chat(self, messages: List[Dict]) -> str:  # 【修正1】参数名改为复数 `messages`
-#         """发送消息给Deepseek并获取回复"""
-#         # 【修正1】此处直接使用参数 `messages`，它是从 server.py 传来的正确列表
-#         data = {
-#             "model": "deepseek-chat",
-#             "messages": messages,  # 现在是正确的变量
-#             "stream": False,
-#             "max_tokens": 50
-#         }
-#         # （可选）可以保留调试打印，但要修正变量名
-#         # print(f"[LLM Client] 收到 {len(messages)} 条历史消息")
-#
-#         try:
-#             async with httpx.AsyncClient(timeout=30.0) as client:
-#                 response = await client.post(self.base_url, json=data, headers=self.headers)
-#
-#                 if response.status_code == 200:
-#                     # 【修正2】关键：这里是 'message' 不是 'messages'
-#                     return response.json()["choices"][0]["message"]["content"]
-#                 else:
-#                     # 可以保留详细的错误信息，便于调试
-#                     error_detail = response.text[:200] if response.text else "无详细信息"
-#                     return f"[DeepSeek API错误] 状态码 {response.status_code}，详情: {error_detail}"
-#
-#         except httpx.TimeoutException:
-#             return "请求DeepSeek API超时，请检查网络连接或稍后重试。"
-#         except Exception as e:
-#             # 打印异常有助于调试
-#             print(f"[LLM Client] 未预期错误: {e}")
-#             return "处理AI回复时发生未知错误。"
 
 class DeepSeekClient:
     """DeepSeek API 客户端"""
@@ -72,7 +12,7 @@ class DeepSeekClient:
         self.api_key = os.getenv("DEEPSEEK_API_KEY")
         if not self.api_key:
             raise ValueError("未找到 DEEPSEEK_API_KEY 环境变量")
-        self.base_url = "https://api.deepseek.com/v1/chat/completions"  # 注意：包含 /v1
+        self.base_url = "https://api.deepseek.com/v1/chat/completions"
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -85,14 +25,14 @@ class DeepSeekClient:
         data = {
             "model": "deepseek-chat",
             "messages": messages,
-            "max_tokens": max_tokens,  # 关键：不再是硬编码的50
+            "max_tokens": max_tokens,
             "temperature": 0.7,
             "stream": False
         }
 
         # 调试日志：查看发送的数据大小
         total_chars = sum(len(msg.get("content", "")) for msg in messages)
-        print(f"[LLM Client] 发送 {len(messages)} 条上下文消息，共约 {total_chars} 字符，请求 {max_tokens} tokens")
+        print(f"[DeepSeek Client] 发送 {len(messages)} 条上下文消息，共约 {total_chars} 字符，请求 {max_tokens} tokens")
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
@@ -104,42 +44,122 @@ class DeepSeekClient:
                 ai_reply = result["choices"][0]["message"]["content"]
                 usage = result.get("usage", {})
 
-                # 调试日志：查看返回的完整信息
-                print(f"[LLM Client] 收到回复，长度: {len(ai_reply)} 字符")
-                print(f"[LLM Client] API消耗: {usage.get('total_tokens', 'N/A')} tokens")
-                # 可选：打印前200字符以验证完整性
-                # print(f"[LLM Client] 回复预览: {ai_reply[:200]}")
-
+                print(f"[DeepSeek Client] 收到回复，长度: {len(ai_reply)} 字符")
+                print(f"[DeepSeek Client] API消耗: {usage.get('total_tokens', 'N/A')} tokens")
                 return ai_reply
 
         except httpx.TimeoutException:
-            print("[LLM Client] 错误: 请求DeepSeek API超时")
+            print("[DeepSeek Client] 错误: 请求超时")
             return "请求超时，请稍后重试。"
         except httpx.HTTPStatusError as e:
-            print(f"[LLM Client] 错误: API返回 HTTP {e.response.status_code}: {e.response.text[:200]}")
+            print(f"[DeepSeek Client] 错误: API返回 HTTP {e.response.status_code}")
             return f"[API错误] 状态码 {e.response.status_code}"
         except Exception as e:
-            print(f"[LLM Client] 未预期错误: {type(e).__name__}: {e}")
+            print(f"[DeepSeek Client] 未预期错误: {type(e).__name__}: {e}")
             return "处理AI回复时发生未知错误。"
+
+
+class MiMoClient:
+    """小米MiMo API 客户端"""
+
+    def __init__(self):
+        self.api_key = os.getenv("MIMO_API_KEY")
+        if not self.api_key:
+            raise ValueError("未找到 MIMO_API_KEY 环境变量")
+
+        # 使用OpenAI SDK（兼容MiMo API）
+        self.client = AsyncOpenAI(
+            api_key=self.api_key,
+            base_url="https://api.xiaomimimo.com/v1"
+        )
+        self.model = "mimo-v2-flash"
+
+    async def chat(self, messages: List[Dict], max_tokens: int = 2000) -> str:
+        """发送消息给小米MiMo并获取回复"""
+
+        # 调试日志
+        total_chars = sum(len(msg.get("content", "")) for msg in messages)
+        print(f"[MiMo Client] 发送 {len(messages)} 条上下文消息，共约 {total_chars} 字符")
+
+        try:
+            # 调用小米MiMo API（兼容OpenAI格式）
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_completion_tokens=min(max_tokens, 4096),  # MiMo可能有token限制
+                temperature=0.8,
+                top_p=0.95,
+                stream=False,
+                stop=None,
+                frequency_penalty=0,
+                presence_penalty=0,
+                extra_body={
+                    "thinking": {"type": "disabled"}
+                }
+            )
+
+            ai_reply = response.choices[0].message.content
+            print(f"[MiMo Client] 收到回复，长度: {len(ai_reply)} 字符")
+
+            # 如果有使用量信息，打印出来
+            if hasattr(response, 'usage'):
+                usage = response.usage
+                print(f"[MiMo Client] API消耗: {usage.total_tokens if usage else 'N/A'} tokens")
+
+            return ai_reply
+
+        except Exception as e:
+            print(f"[MiMo Client] 错误: {type(e).__name__}: {e}")
+
+            # 提供更友好的错误信息
+            error_msg = str(e)
+            if "401" in error_msg or "403" in error_msg:
+                return "认证失败，请检查API密钥是否正确。"
+            elif "429" in error_msg:
+                return "请求过于频繁，请稍后重试。"
+            elif "timeout" in error_msg.lower():
+                return "请求超时，请检查网络连接。"
+            else:
+                return f"小米MiMo服务暂时不可用: {error_msg[:100]}"
+
 
 class MockAIClient:
     """模拟AI客户端，用于无API密钥时测试"""
-    async def chat(self,messages: List[Dict]) -> str:
+
+    async def chat(self, messages: List[Dict], max_tokens: int = 2000) -> str:
         user_msg = messages[-1]["content"].lower()
         if "你好" in user_msg:
             return "你好！我是你的AI桌面机器人，正在开发中。"
         elif "功能" in user_msg:
             return "我目前可以进行对话，未来我会拥有语音、视觉和动作！"
         else:
-            return "这是一个模拟回复。要获取真实AI回复，请在'.env' 文件中配置有效的Deepseek API 密钥。"
+            return "这是一个模拟回复。要获取真实AI回复，请在'.env' 文件中配置有效的API密钥。"
+
 
 def get_llm_client():
     """根据配置返回对应的AI客户端"""
-    provider = os.getenv("LLM_PROVIDER","deepseek").lower()
+    provider = os.getenv("LLM_PROVIDER", "deepseek").lower().strip()
+
+    print(f"[LLM Client] 请求的提供者是：'{provider}'")
+
     if provider == "deepseek":
-        print(f"[LLM Client] 请求的提供者是：'{provider}'")  # 添加这行
-        print("[LLM Client] 正在使用 DeepSeek 客户端。")  # 添加这行
-        return DeepSeekClient()
+        print("[LLM Client] 正在使用 DeepSeek 客户端。")
+        try:
+            return DeepSeekClient()
+        except ValueError as e:
+            print(f"[LLM Client] 警告: {e}")
+            print("[LLM Client] 回退到模拟客户端。")
+            return MockAIClient()
+
+    elif provider == "mimo":
+        print("[LLM Client] 正在使用 小米MiMo 客户端。")
+        try:
+            return MiMoClient()
+        except ValueError as e:
+            print(f"[LLM Client] 警告: {e}")
+            print("[LLM Client] 回退到模拟客户端。")
+            return MockAIClient()
+
     else:
-        print("[LLM Client] 正在使用模拟客户端。")  # 添加这行
+        print(f"[LLM Client] 警告: 未知的提供者 '{provider}'，使用模拟客户端。")
         return MockAIClient()

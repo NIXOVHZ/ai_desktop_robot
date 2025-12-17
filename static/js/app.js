@@ -789,3 +789,215 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+// 添加到现有JavaScript中
+
+let allSessions = [];
+
+// 打开会话管理器
+function openSessionManager() {
+    document.getElementById('sessionManager').style.display = 'block';
+    loadSessionsForDeletion();
+}
+
+// 关闭会话管理器
+function closeSessionManager() {
+    document.getElementById('sessionManager').style.display = 'none';
+}
+
+// 加载会话列表用于批量删除
+async function loadSessionsForDeletion() {
+    try {
+        const response = await fetch('/api/sessions?page_size=50');
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            allSessions = data.sessions;
+            renderSessionList();
+        } else {
+            alert('加载会话列表失败');
+        }
+    } catch (error) {
+        console.error('加载会话列表失败:', error);
+        alert('加载会话列表失败');
+    }
+}
+
+// 渲染会话列表
+function renderSessionList() {
+    const container = document.getElementById('sessionList');
+    if (allSessions.length === 0) {
+        container.innerHTML = '<p>没有找到会话记录</p>';
+        return;
+    }
+
+    let html = '';
+    allSessions.forEach(session => {
+        html += `
+        <div style="display: flex; align-items: center; padding: 5px 0; border-bottom: 1px solid #eee;">
+            <input type="checkbox" value="${session.session_id}" style="margin-right: 10px;">
+            <div style="flex-grow: 1;">
+                <strong>${session.session_id.substring(0, 8)}...</strong>
+                <span style="font-size: 12px; color: #666; margin-left: 10px;">
+                    ${session.message_count} 条消息
+                </span>
+                <br>
+                <span style="font-size: 12px; color: #999;">
+                    最后活动: ${session.last_activity ? new Date(session.last_activity).toLocaleString() : '未知'}
+                </span>
+            </div>
+        </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// 获取选中的会话ID
+function getSelectedSessionIds() {
+    const checkboxes = document.querySelectorAll('#sessionList input[type="checkbox"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// 删除所有会话
+async function deleteAllSessions() {
+    if (!confirm('⚠️ 危险操作！\n\n这将删除所有聊天记录，包括所有会话中的所有消息。\n\n此操作不可恢复！\n\n请输入确认密码 "CONFIRM_DELETE" 继续。')) {
+        return;
+    }
+
+    const password = prompt('请输入确认密码 "CONFIRM_DELETE":');
+    if (password !== 'CONFIRM_DELETE') {
+        alert('密码错误，操作取消');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/sessions?action=all&confirm=CONFIRM_DELETE`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            alert(`✅ ${result.message}`);
+            closeSessionManager();
+            // 刷新页面或重新加载会话列表
+            if (typeof refreshChatInterface === 'function') {
+                refreshChatInterface();
+            }
+        } else {
+            alert(`❌ 删除失败: ${result.detail || result.message}`);
+        }
+    } catch (error) {
+        console.error('删除所有会话失败:', error);
+        alert('删除失败，请检查网络连接');
+    }
+}
+
+// 保留最近N个会话
+async function keepLatestSessions() {
+    const keepCount = parseInt(document.getElementById('keepLatest').value) || 5;
+
+    if (!confirm(`将保留最近 ${keepCount} 个会话，删除其他所有会话。\n\n确定继续吗？`)) {
+        return;
+    }
+
+    const password = prompt('请输入确认密码 "CONFIRM_DELETE":');
+    if (password !== 'CONFIRM_DELETE') {
+        alert('密码错误，操作取消');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/sessions?action=keep_latest&keep_latest=${keepCount}&confirm=CONFIRM_DELETE`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            alert(`✅ ${result.message}`);
+            loadSessionsForDeletion(); // 刷新列表
+            // 刷新主界面
+            if (typeof refreshChatInterface === 'function') {
+                refreshChatInterface();
+            }
+        } else {
+            alert(`❌ 清理失败: ${result.detail || result.message}`);
+        }
+    } catch (error) {
+        console.error('清理旧会话失败:', error);
+        alert('清理失败，请检查网络连接');
+    }
+}
+
+// 批量删除选中的会话
+async function deleteSelectedSessions() {
+    const selectedIds = getSelectedSessionIds();
+
+    if (selectedIds.length === 0) {
+        alert('请先选择要删除的会话');
+        return;
+    }
+
+    if (!confirm(`将删除选中的 ${selectedIds.length} 个会话。\n\n确定继续吗？`)) {
+        return;
+    }
+
+    const password = prompt('请输入确认密码 "CONFIRM_DELETE":');
+    if (password !== 'CONFIRM_DELETE') {
+        alert('密码错误，操作取消');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/sessions/batch', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                session_ids: selectedIds,
+                confirm_password: 'CONFIRM_DELETE'
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            alert(`✅ ${result.message}`);
+            loadSessionsForDeletion(); // 刷新列表
+            // 刷新主界面
+            if (typeof refreshChatInterface === 'function') {
+                refreshChatInterface();
+            }
+        } else {
+            alert(`❌ 删除失败: ${result.detail || result.message}`);
+        }
+    } catch (error) {
+        console.error('批量删除失败:', error);
+        alert('删除失败，请检查网络连接');
+    }
+}
+
+// 添加到现有清空按钮的点击事件
+function setupSessionManagement() {
+    // 修改现有的清空按钮
+    const clearBtn = document.querySelector('button[onclick*="clear"]');
+    if (clearBtn) {
+        clearBtn.onclick = openSessionManager;
+        clearBtn.title = "打开会话管理器";
+    }
+
+    // 或者添加新的按钮
+    document.body.innerHTML += `
+    <button onclick="openSessionManager()" style="position: fixed; bottom: 20px; right: 20px; z-index: 100;">
+        🗂️ 会话管理
+    </button>
+    `;
+}
+
+// 页面加载完成后初始化
+window.addEventListener('DOMContentLoaded', function() {
+    setupSessionManagement();
+});
